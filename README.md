@@ -1,0 +1,309 @@
+<h1 align="center">
+<br>
+ 
+Laravel Tournaments
+<br>
+</h1>
+
+<h4 align="center">A Laravel plugin that generate tournaments out of the box</h4>
+
+ 
+
+* [Features](#features)
+* [Installation](#installation)
+* [Demo](#demo)
+* [Usage](#usage)
+* [Data Model](#data-model)
+* [Models](#models)
+* [Include views](#include-views)   
+* [Limitations](#limitations)
+* [Troubleshooting](#troubleshooting)
+* [Changelog](#changelog)
+
+## Features
+
+- Single Elimination Trees Generation
+- Single Elimination with Preliminary Round Generation
+- Playoff Generation
+- Third place fight
+- List of Fights Generation
+- Customize Preliminary Round Size
+- Customize area number (1,2,4,8)
+- Modify Single Elimination Tree generation on the fly
+- Use teams instead of competitors
+
+## Installation
+> **NOTE**: Depending on your version of Laravel, you should install a different
+> version of the package:
+> 
+> | Laravel Version | Laravel Tournament Version |
+> |:---------------:|:--------------------------:|
+> |        8        |            0.17            |
+> |    5.8 -> 7     |            0.16            |
+> |       5.7       |            0.15            |
+> |       5.6       |            0.14            |
+> |       5.5       |            0.13            |
+
+First, you'll need to install the package via Composer:
+
+```php
+composer require "kunal4sd/laravel-tournaments-projects"
+```
+
+Finally, from the command line again, publish the default configuration file:
+
+```php
+php artisan vendor:publish --tag=laravel-tournaments-projects --force
+```
+
+## Demo
+
+To run the demo, you need to generate Tournaments, Championships, Users, Competitors and Settings
+
+Run Migrations:
+```php
+php artisan migrate
+composer dump-autoload
+```
+
+Seed dummy data:
+```php
+php artisan db:seed --class=LaravelTournamentSeeder
+
+```
+> **WARNING**: Don't do this in production, it would wipe all your data. Use this line for demo purpose only
+
+ 
+Add your custom routes
+
+```php
+Route::get('/', 'App\Http\Controllers\TreeController@index')->name('tree.index');
+Route::post('/championships/{championship}/trees', 'App\Http\Controllers\TreeController@store')->name('tree.store');
+Route::put('/championships/{championship}/trees', 'App\Http\Controllers\TreeController@update')->name('tree.update');
+```
+
+```php
+php artisan db:seed --class=LaravelTournamentSeeder
+
+```
+
+You will be able to access the demo at `http://yourdomain.com/`
+
+## Usage
+```php
+// Create a tournament
+
+$tournament = factory(Tournament::class)->create(['user_id' => Auth::user()->id]);
+
+$championsip = factory(Championship::class)->create(['$tournament_id' => $tournament->id]);
+
+// Optional, if not defined, it will take default in ChampionshipSettings
+
+$settings = factory(ChampionshipSettings::class)->create(['championship_id' => $championship->id]);
+
+// Add competitors to championship
+
+$competitors = factory(\App\Competitor::class,10)->create([
+    'championship_id' => $championship->id,
+     'user_id' => factory(User::class)->create()->id
+]);
+
+// Define strategy to generate
+
+$generation = $championship->chooseGenerationStrategy();
+
+// Generate everything
+
+$generation->run();
+
+// Just generate Tree
+
+$this->generateAllTrees();
+
+// Just generate Fight List
+
+$this->generateAllFights();
+
+```
+ 
+## Models
+### Tournament
+
+```php
+$tournament->owner; // get owner
+$tournament->venue; // get venue
+$tournament->championships; // get championships 
+```
+
+Check tournament type: 
+```php
+$tournament->isOpen()
+$tournament->needsInvitation()
+```
+
+Check tournament level:
+```php
+$tournament ->isInternational()
+$tournament->isNational() 
+$tournament->isRegional()
+$tournament->isEstate()
+$tournament->isMunicipal()
+$tournament->isDistrictal()
+$tournament->isLocal()
+$tournament->hasNoLevel()
+```
+## Championship
+
+```php
+$championship->competitors; // Get competitors
+$championship->teams; // Get teams
+$championship->fighters; // Get fighters
+$championship->category; // Get category
+$championship->tournament; // Get tournament
+$championship->users; // Get users
+$championship->settings; // Get settings
+$championship->fightersGroups; // Get groups 
+$championship->groupsByRound($numRound = 1); // Get groups for a specific round
+$championship->groupsFromRound($numRound = 1); // Get groups from a specific round
+$championship->fights; // Get fights
+$championship->firstRoundFights; // Get fights for the first round only ( Useful when has preliminary )
+$championship->fights($numRound = 1); // Get fights for a specific round
+```
+> **NOTE**: $fighter can be an instance of `Team` or `Competitor`
+
+
+Determine strategy:
+```php
+$championship->isPlayoffCompetitor()
+$championship->isPlayoffTeam()
+$championship->isSingleEliminationCompetitor()
+$championship->isSingleEliminationTeam()
+```
+
+Determine group size:
+```php
+$championship->getGroupSize()
+```
+
+Determine championship type: 
+```php
+$championship->hasPreliminary()
+$championship->isPlayOffType()
+$championship->isSingleEliminationType()
+```
+
+
+### FightersGroup
+
+```php
+$group->championship; // Get championship
+$group->fights; // Get fights
+$group->fighters; // Get fighters
+$group->teams; // Get teams
+$group->competitors; // Get competitors
+$group->users; // Get users
+```
+> **NOTE**: $fighter can be an instance of `Team` or `Competitor`
+
+To get the instance name:
+```php
+$group->getFighterType() // Should return Team::class or Competitor::class
+```
+
+> **NOTE**: This plugin use <a href="https://github.com/lazychaser/laravel-nestedset">laravel-nestedset</a>. 
+This means you can navigate with `$group->children()` or `$group->parent()` or use any methods available in this great plugin.  
+
+### Competitor
+
+```php
+$competitor->user; // Get user
+```
+
+### Team
+```php
+// Create a team
+
+$team = factory(Team::class)
+    ->create([ championship_id' => $championship->id]);
+```
+
+```php
+// Add competitor to team 
+
+$team->competitors()->attach($competitor->id);
+
+// Remove competitor from a team 
+
+$team->competitors()->detach($competitor->id);
+
+```
+
+### Fight 
+
+```php
+$fight->group; // Get group
+$fight->competitor1; // Get competitor1
+$fight->competitor2; // Get competitor2
+$fight->team1; // Get team1
+$fight->team2; // Get team2
+```
+
+## Views
+Preliminary tree
+```php
+@include('laravel-tournaments-project::partials.tree.preliminary') // Preliminary table
+```
+
+Single Elimination tree
+```php
+@include('laravel-tournaments-project::partials.tree.singleElimination', ['hasPreliminary' => 0]) 
+```
+
+Fight List
+```php
+@include('laravel-tournaments-project::partials.fights')
+```
+
+## Run Functional Tests
+
+vendor/bin/phpunit tests
+
+## Limitations
+
+This is a work in progress, and tree creation might be very complex, so there is a bunch of things to achieve.  
+
+- Seed fighter
+- Manage more than 1 fighter out of preliminary round
+- Modify Preliminary Round generation on the fly
+- Use any number of area ( restricted to 1,2,4,8)
+- Manage n+1 case : When for instance, there is 17 competitors in a direct elimination tree, there will have 15 BYES.
+We can improve that making the first match with 3 competitors.
+- Double elimination
+ 
+## Troubleshooting
+
+### Specified key was too long error
+For those running MariaDB or older versions of MySQL you may hit this error when trying to run migrations:
+As outlined in the <a href="https://laravel.com/docs/master/migrations#creating-indexes">Migrations guide</a> to fix this all you have to do is edit your AppServiceProvider.php file and inside the boot method set a default string length:
+```php
+use Illuminate\Support\Facades\Schema;
+
+public function boot()
+{
+Schema::defaultStringLength(191);
+}
+```
+### With this configuration, you must have at least...
+This error means you don't have enough competitors / teams to create given tree
+Try to increase competitor number, decrease areas or preliminary group size, if preliminary round is active 
+
+## ChangeLog:
+
+- v0.17: Update to Laravel 8
+- v0.16: Update to Laravel 5.8
+- v0.15: Update to Laravel 5.7
+- v0.14: Update to Laravel 5.6 / PHP 7.2 support
+- v0.13: Manage third place fight
+- v0.12: Update to Laravel 5.5
+- v0.11: Initial Version
+
